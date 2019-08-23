@@ -1,0 +1,3 @@
+db_user: "testuser"
+db_name: "test"
+db_pass: "{{ vault_db_pass }}"

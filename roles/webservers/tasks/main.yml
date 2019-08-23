@@ -1,0 +1,56 @@
+---
+- name: Install dependencies.
+  become: 'true'
+  yum: 
+    name="{{ item }}" state=present update_cache=true
+  with_items:
+    - gcc-c++
+    - gcc
+    - make
+    - epel-release
+    - git
+
+- name: install nodejs
+  become: 'true'
+  command: yum install nodejs -y
+
+- name: get nodejs app
+  become: 'true'
+  git:
+    repo: 'https://github.com/codetrash/rest-crud.git'
+    dest: "/home/vagrant/rest-crud"
+
+- name: replace line localhost
+  become: 'true'
+  lineinfile: 
+    dest: '/home/vagrant/rest-crud/server.js' 
+    regexp: 'localhost'
+    line: "        host     : {{ host_ip }}, "
+    backrefs: yes
+
+- name: replace line user
+  become: 'true'
+  lineinfile: 
+    dest: '/home/vagrant/rest-crud/server.js' 
+    regexp: 'root'
+    line: "        user     : {{ db_user }}, "
+    backrefs: yes
+
+- name: replace line pass
+  become: 'true'
+  lineinfile: 
+    dest: '/home/vagrant/rest-crud/server.js' 
+    regexp: 'password :'
+    line: "        password : {{ db_pass }}, "
+    backrefs: yes
+
+- name: Install packages based on package.json.
+  become: 'true'
+  command: npm install "{{ code_dir }}" -y
+
+- name: run node app
+  become: 'true'
+  shell:
+    chdir: "{{ code_dir }}"
+    cmd: node server.js
+        

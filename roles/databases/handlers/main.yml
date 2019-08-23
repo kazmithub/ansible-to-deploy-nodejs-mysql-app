@@ -1,0 +1,7 @@
+---
+  - name: 'restart mysqld'
+    service: 
+      name: mysqld 
+      state: restarted  
+  - name: 'restart ufw'
+    service: name=ufw state=restarted

@@ -1,0 +1,81 @@
+---
+- name: Install MySQL 5.7 repo
+  yum: name=http://dev.mysql.com/get/mysql57-community-release-el7-8.noarch.rpm state=present
+
+- name: Install MySQL 5.7 and some packages
+  become: 'true'
+  yum: pkg="{{ item }}" update_cache='true'
+  with_items:
+    - mysql-community-server
+    - mysql-community-client
+    - MySQL-python
+    - mysql-server
+    - git
+    - epel-release
+    - httpd
+  notify: 
+    - 'restart mysqld'
+
+- name : restart mysql
+  service: name=mysqld state=restarted
+
+- name: install ufw
+  become: 'true'
+  command: yum install ufw -y
+
+- name : allow and enable ufw
+  ufw:
+    state: enabled
+    policy: allow
+
+- name: Configure ufw rules
+  ufw: rule={{ item.rule }} port={{ item.port }} proto={{ item.proto }}
+  with_items:
+    - { rule: 'allow', port: '3306', proto: 'tcp' }
+  notify:
+    - restart ufw
+
+- name: Enable ufw logging
+  ufw: logging=on
+  notify:
+    - restart ufw
+
+- name: Change mysql root password and keep track
+  become: 'true'
+  shell: |
+    #!/bin/bash
+    set -x
+    service mysqld start
+    service mysqld enable
+    password_match=`awk '/A temporary password is generated for/ {a=$0} END{ print a }' /var/log/mysqld.log | awk '{print $(NF)}'`
+    mysql -u root -p"$password_match" --connect-expired-password -e "ALTER USER 'root'@'localhost' IDENTIFIED BY {{ db_pass }}; flush privileges; "
+    # user=root
+    password="{{ db_pass }}" > /root/.my.cnf
+    exit 0
+  args:
+    creates: /root/.my.cnf
+  register: change_temp_pass
+  notify: restart mysqld
+
+- name: Create user 'testuser'
+  become: 'true'
+  mysql_user:
+    name: "{{ db_user }}"
+    host: '%'
+    password: "{{ db_pass }}"
+    priv: '*.*:ALL,GRANT'
+    state: present
+    login_user: root
+    login_password: "{{ db_pass }}"
+
+- name: Create database 'test'
+  become: 'true'
+  mysql_db:
+    name: "{{ db_name }}"
+    state: present
+    login_user: "{{ db_user }}"
+    login_password: "{{ db_pass }}"
+
+- name: add table to database
+  become: 'true'
+  command: mysql -u root -p"{{ db_pass }}" -e "use {{ db_name }}; CREATE TABLE IF NOT EXISTS {{ db_table_name }} (`user_id` int(11) NOT NULL AUTO_INCREMENT,  `name` varchar(100) NOT NULL, `email` varchar(100) NOT NULL, `password` varchar(100) NOT NULL, PRIMARY KEY (`user_id`)) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=6 ; "
